@@ -311,6 +311,9 @@ void save_data(const char *filename, int16_t aceleracao[3], int16_t gyro[3], int
     // Fecha o arquivo e confirma que os dados foram salvos
     f_close(&file);
     printf("\nDados dos sensores salvos no arquivo %s.\n", filename);
+    printf("Acelerometro: X=%d, Y=%d, Z=%d\nGiroscopio: X=%d, Y=%d, Z=%d\nTemperatura: %d\n",
+           aceleracao[0], aceleracao[1], aceleracao[2],
+           gyro[0], gyro[1], gyro[2], temp);
 }
 
 // Função para ler o conteúdo de um arquivo e exibir no terminal de forma formatada
