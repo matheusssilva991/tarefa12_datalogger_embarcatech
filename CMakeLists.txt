@@ -35,6 +35,8 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
+add_subdirectory(lib/FatFs_SPI)
+
 add_executable(${PROJECT_NAME} main.c
         lib/button/button.c # Button library
         lib/led/led.c # LED library
@@ -42,18 +44,22 @@ add_executable(${PROJECT_NAME} main.c
         lib/ssd1306/display.c # Display library
         lib/buzzer/buzzer.c # Buzzer library)
         lib/mpu6050/mpu6050.c # MPU6050 library
+        lib/sd_card/sd_card_i.c # SD Card library
+        config/hw_config.c
+
 )
 
 pico_set_program_name(${PROJECT_NAME} "base")
 pico_set_program_version(${PROJECT_NAME} "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(${PROJECT_NAME} 1)
+pico_enable_stdio_uart(${PROJECT_NAME} 0)
 pico_enable_stdio_usb(${PROJECT_NAME} 1)
 
 # Add the standard library to the build
 target_link_libraries(${PROJECT_NAME}
-        pico_stdlib)
+        pico_stdlib
+        )
 
 # Add the standard include files to the build
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -64,11 +70,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Add any user requested libraries
 target_link_libraries(${PROJECT_NAME}
         hardware_i2c
-        hardware_pio
         hardware_timer
         hardware_clocks
-        hardware_adc
+        hardware_rtc
         hardware_pwm
+        FatFs_SPI
         )
 
 pico_add_extra_outputs(${PROJECT_NAME})
