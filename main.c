@@ -13,7 +13,7 @@
 #include "lib/sd_card/sd_card_i.h"
 #include "lib/led/led.h"
 
-#define DEBOUNCE_TIME_US 50000  // 50ms em microssegundos
+#define DEBOUNCE_TIME_US 1500000  // 150ms em microssegundos
 
 void gpio_irq_callback(uint gpio, uint32_t events);
 void update_led_state();
@@ -33,6 +33,11 @@ volatile static bool current_capture_mode = false;
 static int last_num_samples = -1;
 static bool last_is_mounted = false;
 static bool last_is_capturing = false;
+
+volatile static bool showing_temp_message = false;
+volatile static int64_t message_start_time = 0;
+#define MESSAGE_DURATION_US 2000000  // 2 segundos em microssegundos
+volatile static int message_state = 0;  // 0: normal, 1: "Dados salvos", 2: "X amostras salvas"
 
 int main() {
     stdio_init_all();
@@ -90,12 +95,21 @@ int main() {
             last_is_capturing = is_capture_mode;
         }
 
-        // Verifica se o modo de captura foi ativado/desativado
-        if (current_capture_mode != is_capture_mode) {
-            current_capture_mode = is_capture_mode;
-            if (!is_capture_mode) {
-                draw_centered_text(&ssd, "Dados salvos.", 37);
-                ssd1306_send_data(&ssd);
+        // Verifica se a mensagem de temperatura deve ser exibida
+        if (showing_temp_message) {
+            int64_t current_time = to_us_since_boot(get_absolute_time());
+            if (current_time - message_start_time > MESSAGE_DURATION_US) {
+                if (message_state == 1) {
+                    // Muda para a segunda mensagem
+                    message_state = 2;
+                    message_start_time = current_time;
+                } else {
+                    // Finaliza a sequência de mensagens
+                    showing_temp_message = false;
+                    message_state = 0;
+                }
+                // Force a atualização do display
+                last_num_samples = -1;  // Isso forçará update_display na próxima iteração
             }
         }
 
@@ -117,9 +131,26 @@ void gpio_irq_callback(uint gpio, uint32_t events)
         if (!is_mounted) {
             printf("O cartão SD não está montado. Não é possível capturar dados.\n");
         } else {
+            // Salva o estado anterior
+            bool was_capturing = is_capture_mode;
+
+            // Muda o estado
             is_capture_mode = !is_capture_mode;
 
-            printf("Modo de captura %s\n", is_capture_mode ? "ativado" : "desativado");
+            // Se estiver iniciando captura
+            if (is_capture_mode) {
+                num_samples = 0;
+                printf("Modo de captura ativado\n");
+            }
+            // Se estiver finalizando captura e tiver amostras
+            else if (was_capturing && num_samples > 0) {
+                printf("Modo de captura desativado. %d amostras salvas.\n", num_samples);
+
+                // Inicia sequência de mensagens
+                message_state = 1;  // Primeira mensagem: "Dados salvos"
+                showing_temp_message = true;
+                message_start_time = to_us_since_boot(get_absolute_time());
+            }
         }
     } else if (gpio == BTN_SW_PIN && current_time - last_time_btn_sw_pressed > DEBOUNCE_TIME_US) {
         reset_usb_boot(0, 0);
@@ -143,6 +174,7 @@ void update_led_state() {
 void update_display(ssd1306_t *ssd) {
     bool color = true;
     char status_str[20];
+    char message[30];
 
     // Exibição no display
     ssd1306_fill(ssd, !color);
@@ -151,26 +183,44 @@ void update_display(ssd1306_t *ssd) {
     draw_centered_text(ssd, "DATALOGGER", 6);
     ssd1306_line(ssd, 3, 48, 123, 48, color);  // Antes do status
 
-    if (is_mounted) {
-        // Mostrar amostras tanto em modo de captura quanto quando finalizado
-        if (is_capture_mode || num_samples > 0) {
-            char sample_str[20];
-
-            if (is_capture_mode) {
-                snprintf(status_str, sizeof(status_str), "Capturando...");
-                draw_centered_text(ssd, "Amostras:", 18);
-            } else {
-                snprintf(status_str, sizeof(status_str), "SD Montado");
-                draw_centered_text(ssd, "Amos. salvas:", 18);
-            }
-
-            snprintf(sample_str, sizeof(sample_str), "%d", num_samples);
-            draw_centered_text(ssd, sample_str, 28);
-        } else {
-            snprintf(status_str, sizeof(status_str), "SD Montado");
+    // Verifica se deve mostrar mensagem temporária
+    if (showing_temp_message) {
+        if (message_state == 1) {
+            // Primeira mensagem
+            draw_centered_text(ssd, "Dados salvos", 30);
+        } else if (message_state == 2) {
+            // Segunda mensagem
+            snprintf(message, sizeof(message), "%d amos.", num_samples);
+            draw_centered_text(ssd, message, 26);
+            draw_centered_text(ssd, "salvas", 36);
         }
-    } else {
-        snprintf(status_str, sizeof(status_str), "SD Desmontado");
+
+        // Status continua sendo exibido na parte inferior
+        if (is_mounted) {
+            snprintf(status_str, sizeof(status_str), "SD Montado");
+        } else {
+            snprintf(status_str, sizeof(status_str), "SD Desmontado");
+        }
+    }
+    // Exibição normal quando não há mensagem temporária
+    else {
+        if (is_mounted) {
+            if (is_capture_mode) {
+                // No modo de captura, mostra contagem de amostras
+                char sample_str[20];
+                snprintf(status_str, sizeof(status_str), "Capturando...");
+                draw_centered_text(ssd, "Amostras:", 20);
+                snprintf(sample_str, sizeof(sample_str), "%d", num_samples);
+                draw_centered_text(ssd, sample_str, 30);
+            } else {
+                // Quando não está capturando, só mostra "Aguardando..."
+                snprintf(status_str, sizeof(status_str), "SD Montado");
+                draw_centered_text(ssd, "Aguardando...", 30);
+                // NÃO mostrar número de amostras aqui
+            }
+        } else {
+            snprintf(status_str, sizeof(status_str), "SD Desmontado");
+        }
     }
 
     draw_centered_text(ssd, status_str, 52);
