@@ -14,7 +14,7 @@
 #include "lib/led/led.h"
 #include "lib/buzzer/buzzer.h"
 
-#define DEBOUNCE_TIME_US 2000000  // 200ms em microssegundos
+#define DEBOUNCE_TIME_US 200000  // 200ms em microssegundos (corrigido)
 
 void gpio_irq_callback(uint gpio, uint32_t events);
 void update_led_state();
@@ -136,6 +136,7 @@ int main() {
     }
 }
 
+// Callback para interrupções dos botões
 void gpio_irq_callback(uint gpio, uint32_t events)
 {
     int64_t current_time = to_us_since_boot(get_absolute_time());
@@ -148,6 +149,17 @@ void gpio_irq_callback(uint gpio, uint32_t events)
         last_time_btn_b_pressed = current_time;
         if (!is_mounted) {
             printf("O cartão SD não está montado. Não é possível capturar dados.\n");
+
+            // Adicione estas linhas para mostrar a mensagem no display
+            message_state = 3;  // Novo estado para mensagem de erro
+            showing_temp_message = true;
+            message_start_time = to_us_since_boot(get_absolute_time());
+
+            // Force uma atualização imediata do display
+            last_num_samples = -1;  // Isso forçará update_display na próxima iteração
+
+            // Som de erro
+            should_beep_stop = true;
         } else {
             // Salva o estado anterior
             bool was_capturing = is_capture_mode;
@@ -178,6 +190,7 @@ void gpio_irq_callback(uint gpio, uint32_t events)
     }
 }
 
+// Atualiza o estado dos LEDs com base no estado atual
 void update_led_state() {
     if (!is_mounted) {
         set_led_yellow();
@@ -192,6 +205,7 @@ void update_led_state() {
     }
 }
 
+// Atualiza o display com o estado atual
 void update_display(ssd1306_t *ssd) {
     bool color = true;
     char status_str[20];
@@ -214,6 +228,10 @@ void update_display(ssd1306_t *ssd) {
             snprintf(message, sizeof(message), "%d amos.", num_samples);
             draw_centered_text(ssd, message, 22);
             draw_centered_text(ssd, "salvas", 32);
+        } else if (message_state == 3) {
+            // Mensagem de erro - SD não montado
+            draw_centered_text(ssd, "ERRO!", 20);
+            draw_centered_text(ssd, "SD nao montado.", 30);
         }
 
         // Status continua sendo exibido na parte inferior
@@ -255,6 +273,7 @@ void beep_start_capture() {
     stop_tone(BUZZER_A_PIN);  // Para o som
 }
 
+// Função para tocar som de fim de captura
 void beep_stop_capture() {
     play_tone(BUZZER_B_PIN, 900);  // 900 Hz
     sleep_ms(100);
