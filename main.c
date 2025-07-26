@@ -147,18 +147,21 @@ void gpio_irq_callback(uint gpio, uint32_t events)
         printf("Estado do cartão SD: %s\n", is_mounted ? "Montado" : "Desmontado");
     } else if (gpio == BTN_B_PIN && current_time - last_time_btn_b_pressed > DEBOUNCE_TIME_US) {
         last_time_btn_b_pressed = current_time;
+
+        // Verifica se uma mensagem temporária já está sendo exibida
+        if (showing_temp_message) {
+            // Ignora o botão enquanto mensagens temporárias estão ativas
+            printf("Aguarde a mensagem atual desaparecer...\n");
+            return;  // Sai da função sem mudar o estado
+        }
+
         if (!is_mounted) {
             printf("O cartão SD não está montado. Não é possível capturar dados.\n");
 
-            // Adicione estas linhas para mostrar a mensagem no display
-            message_state = 3;  // Novo estado para mensagem de erro
+            message_state = 3;  // Mensagem de erro
             showing_temp_message = true;
             message_start_time = to_us_since_boot(get_absolute_time());
-
-            // Force uma atualização imediata do display
-            last_num_samples = -1;  // Isso forçará update_display na próxima iteração
-
-            // Som de erro
+            last_num_samples = -1;
             should_beep_stop = true;
         } else {
             // Salva o estado anterior
@@ -171,18 +174,16 @@ void gpio_irq_callback(uint gpio, uint32_t events)
             if (is_capture_mode) {
                 num_samples = 0;
                 printf("Modo de captura ativado\n");
-                should_beep_start = true;  // Define flag para tocar som
+                should_beep_start = true;
             }
             // Se estiver finalizando captura e tiver amostras
             else if (was_capturing && num_samples > 0) {
                 printf("Modo de captura desativado. %d amostras salvas.\n", num_samples);
 
-                // Inicia sequência de mensagens
-                message_state = 1;  // Primeira mensagem: "Dados salvos"
+                message_state = 1;
                 showing_temp_message = true;
                 message_start_time = to_us_since_boot(get_absolute_time());
-
-                should_beep_stop = true;  // Define flag para tocar som
+                should_beep_stop = true;
             }
         }
     } else if (gpio == BTN_SW_PIN && current_time - last_time_btn_sw_pressed > DEBOUNCE_TIME_US) {
