@@ -12,12 +12,15 @@
 #include "lib/ssd1306/display.h"
 #include "lib/sd_card/sd_card_i.h"
 #include "lib/led/led.h"
+#include "lib/buzzer/buzzer.h"
 
-#define DEBOUNCE_TIME_US 1500000  // 150ms em microssegundos
+#define DEBOUNCE_TIME_US 2000000  // 200ms em microssegundos
 
 void gpio_irq_callback(uint gpio, uint32_t events);
 void update_led_state();
 void update_display(ssd1306_t *ssd);
+void beep_start_capture();
+void beep_stop_capture();
 
 static char filename[20] = "data.txt";
 volatile static int64_t last_time_btn_a_pressed = 0;
@@ -38,6 +41,8 @@ volatile static bool showing_temp_message = false;
 volatile static int64_t message_start_time = 0;
 #define MESSAGE_DURATION_US 2000000  // 2 segundos em microssegundos
 volatile static int message_state = 0;  // 0: normal, 1: "Dados salvos", 2: "X amostras salvas"
+volatile static bool should_beep_start = false;
+volatile static bool should_beep_stop = false;
 
 int main() {
     stdio_init_all();
@@ -46,12 +51,13 @@ int main() {
     int16_t aceleracao[3], gyro[3], temp;
     ssd1306_t ssd;
 
-
     init_btns();
     init_btn(BTN_SW_PIN);
     init_leds();
     mpu6050_init();
     init_display(&ssd);
+    init_buzzer(BUZZER_A_PIN, 4.0f);  // Inicializa o buzzer com divisor de clock de 4.0
+    init_buzzer(BUZZER_B_PIN, 4.0f);  // Inicializa o buzzer com divisor de clock de 4.0
 
     gpio_set_irq_enabled_with_callback(
         BTN_A_PIN, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_callback);
@@ -113,6 +119,18 @@ int main() {
             }
         }
 
+        // Verifica se deve tocar o som de início de captura
+        if (should_beep_start) {
+            should_beep_start = false;
+            beep_start_capture();
+        }
+
+        // Verifica se deve tocar o som de fim da captura
+        if (should_beep_stop) {
+            should_beep_stop = false;
+            beep_stop_capture();
+        }
+
         update_led_state();
         sleep_ms(500);
     }
@@ -141,6 +159,7 @@ void gpio_irq_callback(uint gpio, uint32_t events)
             if (is_capture_mode) {
                 num_samples = 0;
                 printf("Modo de captura ativado\n");
+                should_beep_start = true;  // Define flag para tocar som
             }
             // Se estiver finalizando captura e tiver amostras
             else if (was_capturing && num_samples > 0) {
@@ -150,6 +169,8 @@ void gpio_irq_callback(uint gpio, uint32_t events)
                 message_state = 1;  // Primeira mensagem: "Dados salvos"
                 showing_temp_message = true;
                 message_start_time = to_us_since_boot(get_absolute_time());
+
+                should_beep_stop = true;  // Define flag para tocar som
             }
         }
     } else if (gpio == BTN_SW_PIN && current_time - last_time_btn_sw_pressed > DEBOUNCE_TIME_US) {
@@ -191,8 +212,8 @@ void update_display(ssd1306_t *ssd) {
         } else if (message_state == 2) {
             // Segunda mensagem
             snprintf(message, sizeof(message), "%d amos.", num_samples);
-            draw_centered_text(ssd, message, 26);
-            draw_centered_text(ssd, "salvas", 36);
+            draw_centered_text(ssd, message, 22);
+            draw_centered_text(ssd, "salvas", 32);
         }
 
         // Status continua sendo exibido na parte inferior
@@ -225,4 +246,21 @@ void update_display(ssd1306_t *ssd) {
 
     draw_centered_text(ssd, status_str, 52);
     ssd1306_send_data(ssd);
+}
+
+// Funções para controle do buzzer
+void beep_start_capture() {
+    play_tone(BUZZER_A_PIN, 450);  // 450 Hz
+    sleep_ms(100);  // Som curto de 100ms
+    stop_tone(BUZZER_A_PIN);  // Para o som
+}
+
+void beep_stop_capture() {
+    play_tone(BUZZER_B_PIN, 900);  // 900 Hz
+    sleep_ms(100);
+    stop_tone(BUZZER_B_PIN);  // Para o som
+    sleep_ms(50);  // Pequena pausa entre os beeps
+    play_tone(BUZZER_B_PIN, 900);  // Reproduz novamente
+    sleep_ms(100);
+    stop_tone(BUZZER_B_PIN);  // Para o som
 }
