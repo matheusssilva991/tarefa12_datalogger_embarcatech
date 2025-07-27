@@ -36,13 +36,13 @@ volatile static bool current_capture_mode = false;
 static int last_num_samples = -1;
 static bool last_is_mounted = false;
 static bool last_is_capturing = false;
-
 volatile static bool showing_temp_message = false;
 volatile static int64_t message_start_time = 0;
 #define MESSAGE_DURATION_US 2000000  // 2 segundos em microssegundos
 volatile static int message_state = 0;  // 0: normal, 1: "Dados salvos", 2: "X amostras salvas"
 volatile static bool should_beep_start = false;
 volatile static bool should_beep_stop = false;
+volatile static bool should_read_file = false;
 
 int main() {
     stdio_init_all();
@@ -125,10 +125,32 @@ int main() {
             beep_start_capture();
         }
 
+        // No loop principal, após os tratamentos dos buzzers
         // Verifica se deve tocar o som de fim da captura
         if (should_beep_stop) {
             should_beep_stop = false;
             beep_stop_capture();
+        }
+
+        // Verifica se deve ler o arquivo
+        if (should_read_file) {
+            should_read_file = false;
+
+            // Exibe mensagem "Lendo..." antes de iniciar a leitura
+            message_state = 5;  // Novo estado para mostrar que está lendo
+            showing_temp_message = true;
+            message_start_time = to_us_since_boot(get_absolute_time());
+            last_num_samples = -1;  // Força atualização do display
+            update_display(&ssd);   // Atualiza imediatamente o display
+
+            // Agora é seguro chamar a função que contém sleep
+            read_file(filename);
+
+            // Após concluir a leitura, mostra mensagem de conclusão
+            message_state = 4;  // Estado para mostrar leitura concluída
+            showing_temp_message = true;
+            message_start_time = to_us_since_boot(get_absolute_time());
+            last_num_samples = -1;
         }
 
         update_led_state();
@@ -187,7 +209,18 @@ void gpio_irq_callback(uint gpio, uint32_t events)
             }
         }
     } else if (gpio == BTN_SW_PIN && current_time - last_time_btn_sw_pressed > DEBOUNCE_TIME_US) {
-        reset_usb_boot(0, 0);
+        last_time_btn_sw_pressed = current_time;
+
+        // Apenas defina a flag para ler o arquivo - NÃO chame read_file() aqui
+        if (is_mounted) {
+            should_read_file = true;
+        } else {
+            // Se não estiver montado, mostra mensagem de erro
+            message_state = 3;
+            showing_temp_message = true;
+            message_start_time = to_us_since_boot(get_absolute_time());
+            last_num_samples = -1;
+        }
     }
 }
 
@@ -233,6 +266,14 @@ void update_display(ssd1306_t *ssd) {
             // Mensagem de erro - SD não montado
             draw_centered_text(ssd, "ERRO!", 20);
             draw_centered_text(ssd, "SD nao montado.", 30);
+        } else if (message_state == 4) {
+            // Mensagem de leitura concluída
+            draw_centered_text(ssd, "Leitura", 20);
+            draw_centered_text(ssd, "concluida!", 30);
+        } else if (message_state == 5) {
+            // Mensagem de leitura em andamento
+            draw_centered_text(ssd, "Lendo", 20);
+            draw_centered_text(ssd, "arquivo...", 30);
         }
 
         // Status continua sendo exibido na parte inferior
