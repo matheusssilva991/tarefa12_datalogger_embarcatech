@@ -63,6 +63,8 @@ int main() {
     gpio_set_irq_enabled(BTN_B_PIN, GPIO_IRQ_EDGE_FALL, true);
     gpio_set_irq_enabled(BTN_SW_PIN, GPIO_IRQ_EDGE_FALL, true);
 
+    run_setrtc("27/07/23 12:00:00");
+
     while (true) {
         // Verifica se houve mudanças no estado do cartão SD
         if (current_mounted != is_mounted) {
@@ -218,7 +220,7 @@ void gpio_irq_callback(uint gpio, uint32_t events)
 // Atualiza o estado dos LEDs com base no estado atual
 void update_led_state() {
     if (is_reading) {
-        set_led_blue(); 
+        set_led_blue();
     }
     else if (!is_mounted) {
         set_led_yellow();

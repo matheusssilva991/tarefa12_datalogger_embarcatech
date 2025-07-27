@@ -19,7 +19,7 @@
 
 sd_card_t *sd_get_by_name(const char *const name);
 FATFS *sd_get_fs_by_name(const char *name);
-void run_setrtc();
+bool run_setrtc(const char *datetime_str);
 void run_format();
 void run_mount();
 void run_unmount();

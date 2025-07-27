@@ -20,66 +20,63 @@ FATFS *sd_get_fs_by_name(const char *name)
     return NULL;
 }
 
-// Função para definir a data e hora do RTC
-void run_setrtc()
+// Função para definir a data e hora do RTC a partir de uma string
+bool run_setrtc(const char *datetime_str)
 {
-    const char *dateStr = strtok(NULL, " ");
-    if (!dateStr)
-    {
-        printf("Missing argument\n");
-        return;
+    if (!datetime_str) {
+        printf("Erro: string de data/hora não fornecida\n");
+        return false;
     }
-    int date = atoi(dateStr);
 
-    const char *monthStr = strtok(NULL, " ");
-    if (!monthStr)
-    {
-        printf("Missing argument\n");
-        return;
+    int date, month, year, hour, min, sec;
+    int result = 0;
+
+    // Tenta interpretar no formato "DD/MM/YY HH:MM:SS"
+    result = sscanf(datetime_str, "%d/%d/%d %d:%d:%d",
+                   &date, &month, &year, &hour, &min, &sec);
+
+    // Se falhou, tenta formato alternativo "YYYY-MM-DD HH:MM:SS"
+    if (result != 6) {
+        result = sscanf(datetime_str, "%d-%d-%d %d:%d:%d",
+                       &year, &month, &date, &hour, &min, &sec);
+
+        // Se ainda falhou, formato inválido
+        if (result != 6) {
+            printf("Formato de data/hora inválido. Use DD/MM/YY HH:MM:SS ou YYYY-MM-DD HH:MM:SS\n");
+            return false;
+        }
+    } else {
+        // No formato DD/MM/YY, o ano tem dois dígitos, então adiciona 2000
+        year += 2000;
     }
-    int month = atoi(monthStr);
 
-    const char *yearStr = strtok(NULL, " ");
-    if (!yearStr)
-    {
-        printf("Missing argument\n");
-        return;
+    // Valida os valores
+    if (date < 1 || date > 31 || month < 1 || month > 12 ||
+        year < 2000 || year > 2099 ||
+        hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 59) {
+        printf("Valores de data/hora inválidos\n");
+        return false;
     }
-    int year = atoi(yearStr) + 2000;
 
-    const char *hourStr = strtok(NULL, " ");
-    if (!hourStr)
-    {
-        printf("Missing argument\n");
-        return;
-    }
-    int hour = atoi(hourStr);
-
-    const char *minStr = strtok(NULL, " ");
-    if (!minStr)
-    {
-        printf("Missing argument\n");
-        return;
-    }
-    int min = atoi(minStr);
-
-    const char *secStr = strtok(NULL, " ");
-    if (!secStr)
-    {
-        printf("Missing argument\n");
-        return;
-    }
-    int sec = atoi(secStr);
-
+    // Configura o RTC
     datetime_t t = {
         .year = (int16_t)year,
         .month = (int8_t)month,
         .day = (int8_t)date,
-        .dotw = 0, // 0 is Sunday
+        .dotw = 0, // 0 é domingo
         .hour = (int8_t)hour,
         .min = (int8_t)min,
-        .sec = (int8_t)sec};
-    rtc_set_datetime(&t);
+        .sec = (int8_t)sec
+    };
+
+    if (!rtc_set_datetime(&t)) {
+        printf("Falha ao definir RTC\n");
+        return false;
+    }
+
+    printf("RTC configurado para: %02d/%02d/%04d %02d:%02d:%02d\n",
+           date, month, year, hour, min, sec);
+    return true;
 }
 
 // Função para montar o cartão SD
