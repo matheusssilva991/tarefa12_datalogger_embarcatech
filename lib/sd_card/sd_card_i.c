@@ -253,7 +253,7 @@ void run_cat()
 }
 
 // Função para salvar dados do acelerômetro e giroscópio no cartão SD
-void save_data(const char *filename, int16_t aceleracao[3], int16_t gyro[3], int16_t temp)
+void save_data(const char *filename, int16_t aceleracao[3], int16_t gyro[3], float temp_celsius)
 {
     FIL file;
     FRESULT res;
@@ -294,26 +294,27 @@ void save_data(const char *filename, int16_t aceleracao[3], int16_t gyro[3], int
 
     // Formata os dados para o arquivo CSV
     char buffer[100];
-    sprintf(buffer, "%s,%d,%d,%d,%d,%d,%d\n",
+    sprintf(buffer, "%s,%d,%d,%d,%d,%d,%d,%.2f\n",
             datetime_str,
             aceleracao[0], aceleracao[1], aceleracao[2],
-            gyro[0], gyro[1], gyro[2]);
+            gyro[0], gyro[1], gyro[2], temp_celsius);
 
     // Escreve no arquivo
     res = f_write(&file, buffer, strlen(buffer), &bw);
-    if (res != FR_OK)
-    {
+    if (res != FR_OK) {
         printf("[ERRO] Não foi possível escrever no arquivo. Monte o Cartao.\n");
         f_close(&file);
         return;
     }
 
-    // Fecha o arquivo e confirma que os dados foram salvos
+    // Fecha o arquivo
     f_close(&file);
-    printf("\nDados dos sensores salvos no arquivo %s.\n", filename);
-    printf("Acelerometro: X=%d, Y=%d, Z=%d\nGiroscopio: X=%d, Y=%d, Z=%d\nTemperatura: %d\n",
+
+    // Exibe os dados no formato CSV para fácil cópia
+    printf("%s,%d,%d,%d,%d,%d,%d,%.2f\n",
+           datetime_str,
            aceleracao[0], aceleracao[1], aceleracao[2],
-           gyro[0], gyro[1], gyro[2], temp);
+           gyro[0], gyro[1], gyro[2], temp_celsius);
 }
 
 // Função para ler o conteúdo de um arquivo e exibir no terminal de forma formatada
@@ -328,54 +329,23 @@ void read_file(const char *filename)
     }
 
     char buffer[128];
-    UINT br;
     int line_count = 0;
     bool header_processed = false;
 
     printf("\n==== Leitura de Dados: %s ====\n\n", filename);
+    printf("Os dados estão no formato CSV pronto para cópia:\n\n");
 
     // Ler linha por linha
     while (f_gets(buffer, sizeof(buffer), &file))
     {
+        // Imprimir cada linha exatamente como está no arquivo
+        printf("%s", buffer);  // O buffer já contém o caractere de nova linha
         line_count++;
-
-        // Processar cabeçalho (primeira linha)
-        if (line_count == 1) {
-            printf("CABEÇALHO: %s", buffer);
-            printf("----------------------------------------\n");
-            header_processed = true;
-            continue;
-        }
-
-        // Processar linhas de dados
-        if (header_processed) {
-            // Variáveis para armazenar os dados extraídos
-            char date[11], time[9];
-            int acel_x, acel_y, acel_z;
-            int gyro_x, gyro_y, gyro_z;
-
-            // Analisar a linha CSV
-            // Formato esperado: yyyy-mm-dd,hh:mm:ss,acel_x,acel_y,acel_z,gyro_x,gyro_y,gyro_z
-            int result = sscanf(buffer, "%10[^,],%8[^,],%d,%d,%d,%d,%d,%d",
-                        date, time, &acel_x, &acel_y, &acel_z,
-                        &gyro_x, &gyro_y, &gyro_z);
-
-            if (result == 8) {
-                // Exibe os dados formatados
-                printf("Registro #%d - Data/Hora: %s %s\n", line_count-1, date, time);
-                printf("  Acelerômetro: X=%6d, Y=%6d, Z=%6d\n", acel_x, acel_y, acel_z);
-                printf("  Giroscópio:   X=%6d, Y=%6d, Z=%6d\n", gyro_x, gyro_y, gyro_z);
-                printf("----------------------------------------\n");
-            } else {
-                // Linha não corresponde ao formato esperado
-                printf("Formato inválido na linha %d: %s", line_count, buffer);
-            }
-        }
     }
 
     f_close(&file);
 
     // Estatísticas de leitura
-    printf("\nTotal de %d registros lidos do arquivo.\n", line_count - 1);
+    printf("\nTotal de %d linhas lidas do arquivo.\n", line_count);
     printf("==== Leitura concluída ====\n\n");
 }

@@ -28,7 +28,7 @@ void run_ls();
 void run_cat();
 
 // Função para capturar dados do ADC e salvar no arquivo *.txt
-void save_data(const char *filename, int16_t aceleracao[3], int16_t gyro[3], int16_t temp);
+void save_data(const char *filename, int16_t aceleracao[3], int16_t gyro[3], float temp_celsius);
 
 // Função para ler o conteúdo de um arquivo e exibir no terminal
 void read_file(const char *filename);

@@ -14,7 +14,7 @@
 #include "lib/led/led.h"
 #include "lib/buzzer/buzzer.h"
 
-#define DEBOUNCE_TIME_US 150000 
+#define DEBOUNCE_TIME_US 150000
 
 void gpio_irq_callback(uint gpio, uint32_t events);
 void update_led_state();
@@ -31,8 +31,6 @@ volatile static bool is_capture_mode = false;
 volatile static int num_samples = 0;
 volatile static bool current_mounted = false;
 volatile static bool current_capture_mode = false;
-
-// Evite redesenhar o display quando não há mudanças
 static int last_num_samples = -1;
 static bool last_is_mounted = false;
 static bool last_is_capturing = false;
@@ -90,12 +88,11 @@ int main() {
             num_samples++;
         }
 
-        // No loop principal, antes de update_display()
-        // Se a lógica de atualização do display estiver sendo executada muito frequentemente
+        // Atualiza o estado do display
         bool display_needs_update = (last_num_samples != num_samples) ||
                          (last_is_mounted != is_mounted) ||
                          (last_is_capturing != is_capture_mode) ||
-                         showing_temp_message;  // Sempre atualize quando há mensagem
+                         showing_temp_message; // Força atualização se mensagem temporária estiver ativa
 
         if (display_needs_update) {
             update_display(&ssd);
@@ -109,16 +106,13 @@ int main() {
             int64_t current_time = to_us_since_boot(get_absolute_time());
             if (current_time - message_start_time > MESSAGE_DURATION_US) {
                 if (message_state == 1) {
-                    // Muda para a segunda mensagem
                     message_state = 2;
                     message_start_time = current_time;
                 } else {
-                    // Finaliza a sequência de mensagens
                     showing_temp_message = false;
                     message_state = 0;
                 }
-                // Force a atualização do display
-                last_num_samples = -1;  // Isso forçará update_display na próxima iteração
+                last_num_samples = -1;
             }
         }
 
@@ -128,7 +122,6 @@ int main() {
             beep_start_capture();
         }
 
-        // No loop principal, após os tratamentos dos buzzers
         // Verifica se deve tocar o som de fim da captura
         if (should_beep_stop) {
             should_beep_stop = false;
@@ -139,27 +132,21 @@ int main() {
         if (should_read_file) {
             should_read_file = false;
 
-            // Exibe mensagem "Lendo..." antes de iniciar a leitura
-            message_state = 5;  // Novo estado para mostrar que está lendo
+            message_state = 5;
             showing_temp_message = true;
             message_start_time = to_us_since_boot(get_absolute_time());
             last_num_samples = -1;  // Força atualização do display
             update_display(&ssd);   // Atualiza imediatamente o display
 
-            // Define o estado de leitura para VERDADEIRO
             is_reading = true;
             update_led_state();  // Atualiza o LED imediatamente
-
-            // Agora é seguro chamar a função que contém sleep
             read_file(filename);
 
-            // Após concluir a leitura, mostra mensagem de conclusão
             message_state = 4;  // Estado para mostrar leitura concluída
             showing_temp_message = true;
             message_start_time = to_us_since_boot(get_absolute_time());
             last_num_samples = -1;
 
-            // Define o estado de leitura para FALSO
             is_reading = false;
         }
 
@@ -182,9 +169,8 @@ void gpio_irq_callback(uint gpio, uint32_t events)
 
         // Verifica se uma mensagem temporária já está sendo exibida
         if (showing_temp_message && message_state != 3 && message_state != 4) {
-            // Ignora apenas certos tipos de mensagens temporárias
             printf("Aguarde a mensagem atual desaparecer...\n");
-            return;  // Sai da função sem mudar o estado
+            return;
         }
 
         if (!is_mounted) {
@@ -196,19 +182,16 @@ void gpio_irq_callback(uint gpio, uint32_t events)
             last_num_samples = -1;
             should_beep_stop = true;
         } else {
-            // Salva o estado anterior
             bool was_capturing = is_capture_mode;
 
             // Muda o estado
             is_capture_mode = !is_capture_mode;
 
-            // Se estiver iniciando captura
             if (is_capture_mode) {
                 num_samples = 0;
                 printf("Modo de captura ativado\n");
                 should_beep_start = true;
             }
-            // Se estiver finalizando captura e tiver amostras
             else if (was_capturing && num_samples > 0) {
                 printf("Modo de captura desativado. %d amostras salvas.\n", num_samples);
 
@@ -221,11 +204,9 @@ void gpio_irq_callback(uint gpio, uint32_t events)
     } else if (gpio == BTN_SW_PIN && current_time - last_time_btn_sw_pressed > DEBOUNCE_TIME_US) {
         last_time_btn_sw_pressed = current_time;
 
-        // Apenas defina a flag para ler o arquivo - NÃO chame read_file() aqui
         if (is_mounted) {
             should_read_file = true;
         } else {
-            // Se não estiver montado, mostra mensagem de erro
             message_state = 3;
             showing_temp_message = true;
             message_start_time = to_us_since_boot(get_absolute_time());
@@ -237,7 +218,7 @@ void gpio_irq_callback(uint gpio, uint32_t events)
 // Atualiza o estado dos LEDs com base no estado atual
 void update_led_state() {
     if (is_reading) {
-        set_led_blue();  // LED azul durante a leitura do arquivo
+        set_led_blue(); 
     }
     else if (!is_mounted) {
         set_led_yellow();
