@@ -1,4 +1,4 @@
-# 📊 DataLogger EmbarcaTech
+# 📊 InertiaSense Datalogger
 
 Um sistema avançado de captura de dados inerciais desenvolvido para **Raspberry Pi Pico** com interface OLED e armazenamento em cartão SD.
 
