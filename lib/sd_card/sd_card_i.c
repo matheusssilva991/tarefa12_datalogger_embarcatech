@@ -330,7 +330,6 @@ void read_file(const char *filename)
     bool header_processed = false;
 
     printf("\n==== Leitura de Dados: %s ====\n\n", filename);
-    printf("Os dados estão no formato CSV pronto para cópia:\n\n");
 
     // Ler linha por linha
     while (f_gets(buffer, sizeof(buffer), &file))

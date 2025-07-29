@@ -14,7 +14,7 @@
 #include "lib/led/led.h"
 #include "lib/buzzer/buzzer.h"
 
-#define DEBOUNCE_TIME_US 150000
+#define DEBOUNCE_TIME_US 200000
 
 void gpio_irq_callback(uint gpio, uint32_t events);
 void update_led_state();
@@ -29,8 +29,6 @@ volatile static int64_t last_time_btn_sw_pressed = 0;
 volatile static bool is_mounted = false;
 volatile static bool is_capture_mode = false;
 volatile static int num_samples = 0;
-volatile static bool current_mounted = false;
-volatile static bool current_capture_mode = false;
 static int last_num_samples = -1;
 static bool last_is_mounted = false;
 static bool last_is_capturing = false;
@@ -67,8 +65,7 @@ int main() {
 
     while (true) {
         // Verifica se houve mudanças no estado do cartão SD
-        if (current_mounted != is_mounted) {
-            current_mounted = is_mounted;
+        if (last_is_mounted != is_mounted) {
             if (is_mounted) {
                 printf("Montando o cartão SD...\n");
                 run_mount();
